@@ -1,0 +1,11 @@
+/node_modules
+/.next
+/out
+.DS_Store
+.env
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+
+# Generated placeholder images from the local seed
+/public/img
