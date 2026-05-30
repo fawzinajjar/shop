@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/db";
+import { prisma, isDbConnectionError } from "@/lib/db";
 import { publicImageUrl } from "@/lib/r2";
 
 export const PAGE_SIZE = 24;
@@ -48,17 +48,23 @@ function firstImageUrl(images: { r2Key: string }[]): string | null {
 }
 
 export async function getCategories(): Promise<string[]> {
-  const rows = await prisma.product.findMany({
-    distinct: ["category"],
-    select: { category: true },
-    orderBy: { category: "asc" },
-  });
-  return rows.map((r) => r.category);
+  try {
+    const rows = await prisma.product.findMany({
+      distinct: ["category"],
+      select: { category: true },
+      orderBy: { category: "asc" },
+    });
+    return rows.map((r) => r.category);
+  } catch (e) {
+    if (isDbConnectionError(e)) return [];
+    throw e;
+  }
 }
 
 export async function getCatalog(params: CatalogParams): Promise<{
   products: ProductCard[];
   nextCursor: string | null;
+  dbError?: boolean;
 }> {
   const sort: Sort = params.sort ?? "newest";
   const cursor = decodeCursor(params.cursor);
@@ -104,25 +110,31 @@ export async function getCatalog(params: CatalogParams): Promise<{
     }
   }
 
-  const rows = await prisma.product.findMany({
-    where,
-    orderBy,
-    take: PAGE_SIZE + 1,
-    select: {
-      id: true,
-      seq: true,
-      slug: true,
-      title: true,
-      category: true,
-      priceCents: true,
-      currency: true,
-      images: {
-        orderBy: { position: "asc" },
-        take: 1,
-        select: { r2Key: true },
+  let rows;
+  try {
+    rows = await prisma.product.findMany({
+      where,
+      orderBy,
+      take: PAGE_SIZE + 1,
+      select: {
+        id: true,
+        seq: true,
+        slug: true,
+        title: true,
+        category: true,
+        priceCents: true,
+        currency: true,
+        images: {
+          orderBy: { position: "asc" },
+          take: 1,
+          select: { r2Key: true },
+        },
       },
-    },
-  });
+    });
+  } catch (e) {
+    if (isDbConnectionError(e)) return { products: [], nextCursor: null, dbError: true };
+    throw e;
+  }
 
   const hasMore = rows.length > PAGE_SIZE;
   const page = rows.slice(0, PAGE_SIZE);
@@ -145,13 +157,19 @@ export async function getCatalog(params: CatalogParams): Promise<{
 }
 
 export async function getProductBySlug(slug: string) {
-  const product = await prisma.product.findUnique({
-    where: { slug },
-    include: {
-      images: { orderBy: { position: "asc" } },
-      seller: { include: { seller: true } },
-    },
-  });
+  let product;
+  try {
+    product = await prisma.product.findUnique({
+      where: { slug },
+      include: {
+        images: { orderBy: { position: "asc" } },
+        seller: { include: { seller: true } },
+      },
+    });
+  } catch (e) {
+    if (isDbConnectionError(e)) return null;
+    throw e;
+  }
   if (!product) return null;
   return {
     ...product,

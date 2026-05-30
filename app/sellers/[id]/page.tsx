@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { prisma, isDbConnectionError } from "@/lib/db";
 import { publicImageUrl } from "@/lib/r2";
 import { formatMoney } from "@/lib/money";
 
@@ -11,18 +11,28 @@ export default async function SellerProfilePage({
 }: {
   params: { id: string };
 }) {
-  const seller = await prisma.user.findFirst({
-    where: { id: params.id, role: "SELLER" },
-    include: { seller: true },
-  });
+  const seller = await prisma.user
+    .findFirst({
+      where: { id: params.id, role: "SELLER" },
+      include: { seller: true },
+    })
+    .catch((e) => {
+      if (isDbConnectionError(e)) return null; // no DB → treat as not found
+      throw e;
+    });
   if (!seller) notFound();
 
-  const products = await prisma.product.findMany({
-    where: { sellerId: seller.id },
-    orderBy: { createdAt: "desc" },
-    take: 48,
-    include: { images: { orderBy: { position: "asc" }, take: 1 } },
-  });
+  const products = await prisma.product
+    .findMany({
+      where: { sellerId: seller.id },
+      orderBy: { createdAt: "desc" },
+      take: 48,
+      include: { images: { orderBy: { position: "asc" }, take: 1 } },
+    })
+    .catch((e) => {
+      if (isDbConnectionError(e)) return [];
+      throw e;
+    });
 
   return (
     <main className="container">

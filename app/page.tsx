@@ -24,7 +24,7 @@ export default async function CatalogPage({
   const sort = (one(searchParams.sort) as Sort) ?? "newest";
   const cursor = one(searchParams.cursor);
 
-  const [{ products, nextCursor }, categories] = await Promise.all([
+  const [{ products, nextCursor, dbError }, categories] = await Promise.all([
     getCatalog({ q, category, sort, cursor }),
     getCategories(),
   ]);
@@ -40,6 +40,16 @@ export default async function CatalogPage({
       <h1 style={{ fontFamily: "var(--display-font)", color: "var(--brand)" }}>
         Shop
       </h1>
+
+      {dbError && (
+        <div className="notice">
+          <strong>No database connected.</strong> The app is running, but it
+          can&rsquo;t reach a database yet. Set <code>DATABASE_URL</code> in{" "}
+          <code>.env</code>, then run{" "}
+          <code>npx prisma db push</code> and <code>npm run seed</code>. See the
+          README for the full setup.
+        </div>
+      )}
 
       <form className="filters" method="get" action="/">
         <input
